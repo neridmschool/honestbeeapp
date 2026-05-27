@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "277837413779",
+    "project_id": "honestbee-6b314",
+    "storage_bucket": "honestbee-6b314.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:277837413779:android:706dfd91fece872b317c66",
+        "android_client_info": {
+          "package_name": "com.example.honestbeeapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA__gfSqwQkSJ3qGSQFb4Q6k3enWNa8g5w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
