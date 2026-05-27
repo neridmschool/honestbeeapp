@@ -47,8 +47,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
@@ -74,6 +76,7 @@ import com.example.honestbeeapp.data.model.AndroidOrder
 import com.example.honestbeeapp.data.model.AndroidStore
 import com.example.honestbeeapp.data.model.CustomerProfile
 import com.example.honestbeeapp.data.model.SessionProfile
+import com.example.honestbeeapp.data.repository.UserRepository
 import com.example.honestbeeapp.data.sample.AndroidSampleData
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
@@ -86,15 +89,15 @@ import com.example.honestbeeapp.ui.components.StoreCard
 import com.example.honestbeeapp.ui.components.formatSamplePeso
 import com.example.honestbeeapp.ui.theme.BeeCream
 import com.example.honestbeeapp.ui.theme.BeeDarkText
+import com.example.honestbeeapp.ui.theme.BeeError
 import com.example.honestbeeapp.ui.theme.BeeHoneyYellow
 import com.example.honestbeeapp.ui.theme.BeeMuted
 import com.example.honestbeeapp.ui.theme.BeeNavigationSelected
 import com.example.honestbeeapp.ui.theme.BeePrimaryYellow
+import com.example.honestbeeapp.ui.theme.BeeSuccess
 import com.example.honestbeeapp.util.FirebaseConstants
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -109,7 +112,13 @@ fun CustomerMainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(CustomerTab.Home) }
     var customerProfile by remember { mutableStateOf<CustomerProfile?>(null) }
-    var isEditingProfile by rememberSaveable { mutableStateOf(false) }
+    var activeProfileDialog by rememberSaveable { mutableStateOf<CustomerProfileDialog?>(null) }
+    var profileMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var defaultPaymentMethod by rememberSaveable(profile.uid) { mutableStateOf("Cash on Delivery") }
+    var orderUpdatesEnabled by rememberSaveable(profile.uid) { mutableStateOf(true) }
+    var promotionsEnabled by rememberSaveable(profile.uid) { mutableStateOf(false) }
+    var deliveryAlertsEnabled by rememberSaveable(profile.uid) { mutableStateOf(true) }
+    val userRepository = remember(firestore) { UserRepository(firestore) }
     val cartItems = remember {
         mutableStateListOf<AndroidCartItem>().apply {
             addAll(AndroidSampleData.cartItems)
@@ -121,7 +130,6 @@ fun CustomerMainScreen(
         }
     }
     var checkoutMessage by rememberSaveable { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(profile.uid, firestore) {
         customerProfile = runCatching {
@@ -131,63 +139,116 @@ fun CustomerMainScreen(
                 .await()
                 .toObject(CustomerProfile::class.java)
         }.getOrNull()
+
+        runCatching {
+            firestore.collection(FirebaseConstants.ANDROID_CUSTOMER_SETTINGS)
+                .document(profile.uid)
+                .get()
+                .await()
+        }.onSuccess { document ->
+            defaultPaymentMethod = document.getString("defaultPaymentMethod") ?: defaultPaymentMethod
+            orderUpdatesEnabled = document.getBoolean("orderUpdates") ?: orderUpdatesEnabled
+            promotionsEnabled = document.getBoolean("promotions") ?: promotionsEnabled
+            deliveryAlertsEnabled = document.getBoolean("deliveryAlerts") ?: deliveryAlertsEnabled
+        }
     }
 
-    fun saveCustomerProfile(
+    suspend fun saveCustomerPersonalInfo(
         firstName: String,
         lastName: String,
-        phone: String,
-        address: String
-    ) {
-        scope.launch {
-            val cleanFirstName = firstName.trim()
-            val cleanLastName = lastName.trim()
-            val cleanPhone = phone.trim()
-            val cleanAddress = address.trim()
-            val displayName = "$cleanFirstName $cleanLastName".trim()
+        phone: String
+    ): Result<String> {
+        val cleanFirstName = firstName.trim()
+        val cleanLastName = lastName.trim()
+        val cleanPhone = phone.trim()
+        val currentAddress = customerProfile?.address.orEmpty()
 
-            val userUpdates = mapOf(
-                "firstName" to cleanFirstName,
-                "lastName" to cleanLastName,
-                "username" to displayName,
-                "phone" to cleanPhone,
-                "address" to cleanAddress,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-            val profileUpdates = mapOf(
-                "uid" to profile.uid,
-                "email" to profile.email,
-                "firstName" to cleanFirstName,
-                "lastName" to cleanLastName,
-                "phone" to cleanPhone,
-                "address" to cleanAddress,
-                "role" to FirebaseConstants.ROLE_CUSTOMER,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
+        if (cleanFirstName.isBlank() || cleanLastName.isBlank() || cleanPhone.isBlank()) {
+            return Result.failure(IllegalArgumentException("First name, last name, and phone are required."))
+        }
 
-            runCatching {
-                firestore.collection(FirebaseConstants.USERS)
-                    .document(profile.uid)
-                    .set(userUpdates, SetOptions.merge())
-                    .await()
-                firestore.collection(FirebaseConstants.CUSTOMERS)
-                    .document(profile.uid)
-                    .set(profileUpdates, SetOptions.merge())
-                    .await()
-            }.onSuccess {
-                customerProfile = (customerProfile ?: CustomerProfile(
-                    uid = profile.uid,
-                    email = profile.email,
-                    role = FirebaseConstants.ROLE_CUSTOMER,
-                    status = profile.status
-                )).copy(
-                    firstName = cleanFirstName,
-                    lastName = cleanLastName,
-                    phone = cleanPhone,
-                    address = cleanAddress
+        return runCatching {
+            userRepository.updateCustomerProfile(
+                uid = profile.uid,
+                email = profile.email,
+                firstName = cleanFirstName,
+                lastName = cleanLastName,
+                phone = cleanPhone,
+                address = currentAddress
+            )
+        }.map {
+            customerProfile = (customerProfile ?: CustomerProfile(
+                uid = profile.uid,
+                email = profile.email,
+                role = FirebaseConstants.ROLE_CUSTOMER,
+                status = profile.status
+            )).copy(
+                firstName = cleanFirstName,
+                lastName = cleanLastName,
+                phone = cleanPhone,
+                address = currentAddress
+            )
+            profileMessage = "Personal information updated."
+            "Personal information updated."
+        }
+    }
+
+    suspend fun saveCustomerAddress(address: String): Result<String> {
+        val cleanAddress = address.trim()
+        if (cleanAddress.isBlank()) {
+            return Result.failure(IllegalArgumentException("Address is required."))
+        }
+
+        return runCatching {
+            userRepository.updateCustomerAddress(
+                uid = profile.uid,
+                address = cleanAddress
+            )
+        }.map {
+            customerProfile = (customerProfile ?: CustomerProfile(
+                uid = profile.uid,
+                email = profile.email,
+                role = FirebaseConstants.ROLE_CUSTOMER,
+                status = profile.status
+            )).copy(address = cleanAddress)
+            profileMessage = "Default address updated."
+            "Default address updated."
+        }
+    }
+
+    suspend fun saveCustomerPaymentMethod(paymentMethod: String): Result<String> {
+        return runCatching {
+            userRepository.updateCustomerSettings(
+                uid = profile.uid,
+                settings = mapOf("defaultPaymentMethod" to paymentMethod)
+            )
+        }.map {
+            defaultPaymentMethod = paymentMethod
+            profileMessage = "Default payment method updated."
+            "Default payment method updated."
+        }
+    }
+
+    suspend fun saveCustomerNotifications(
+        orderUpdates: Boolean,
+        promotions: Boolean,
+        deliveryAlerts: Boolean
+    ): Result<String> {
+        return runCatching {
+            userRepository.updateCustomerSettings(
+                uid = profile.uid,
+                settings = mapOf(
+                    "orderUpdates" to orderUpdates,
+                    "promotions" to promotions,
+                    "deliveryAlerts" to deliveryAlerts
                 )
-                isEditingProfile = false
-            }
+            )
+        }.map {
+            orderUpdatesEnabled = orderUpdates
+            promotionsEnabled = promotions
+            deliveryAlertsEnabled = deliveryAlerts
+            profileMessage = "Notification settings saved."
+            "Notification settings saved."
         }
     }
 
@@ -274,20 +335,51 @@ fun CustomerMainScreen(
                 CustomerTab.Profile -> CustomerProfileContent(
                     profile = profile,
                     customerProfile = customerProfile,
-                    onEditProfile = { isEditingProfile = true },
+                    message = profileMessage,
+                    defaultPaymentMethod = defaultPaymentMethod,
+                    onEditProfile = { activeProfileDialog = CustomerProfileDialog.PersonalInformation },
+                    onOpenDialog = {
+                        profileMessage = null
+                        activeProfileDialog = it
+                    },
                     onLogout = onLogout
                 )
             }
         }
     }
 
-    if (isEditingProfile) {
-        CustomerProfileEditDialog(
+    when (activeProfileDialog) {
+        CustomerProfileDialog.PersonalInformation -> CustomerProfileEditDialog(
             profile = profile,
             customerProfile = customerProfile,
-            onDismiss = { isEditingProfile = false },
-            onSave = ::saveCustomerProfile
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::saveCustomerPersonalInfo,
+            onSaved = { activeProfileDialog = null }
         )
+        CustomerProfileDialog.AddressBook -> CustomerAddressDialog(
+            customerProfile = customerProfile,
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::saveCustomerAddress,
+            onSaved = { activeProfileDialog = null }
+        )
+        CustomerProfileDialog.PaymentMethods -> CustomerPaymentMethodsDialog(
+            selectedPaymentMethod = defaultPaymentMethod,
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::saveCustomerPaymentMethod,
+            onSaved = { activeProfileDialog = null }
+        )
+        CustomerProfileDialog.Notifications -> CustomerNotificationsDialog(
+            orderUpdates = orderUpdatesEnabled,
+            promotions = promotionsEnabled,
+            deliveryAlerts = deliveryAlertsEnabled,
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::saveCustomerNotifications,
+            onSaved = { activeProfileDialog = null }
+        )
+        CustomerProfileDialog.HelpCenter -> CustomerHelpCenterDialog(
+            onDismiss = { activeProfileDialog = null }
+        )
+        null -> Unit
     }
 }
 }
@@ -648,7 +740,10 @@ private fun CustomerOrdersContent(orders: List<AndroidOrder>) {
 private fun CustomerProfileContent(
     profile: SessionProfile,
     customerProfile: CustomerProfile?,
+    message: String?,
+    defaultPaymentMethod: String,
     onEditProfile: () -> Unit,
+    onOpenDialog: (CustomerProfileDialog) -> Unit,
     onLogout: () -> Unit
 ) {
     val displayName = customerFullName(profile, customerProfile)
@@ -698,16 +793,46 @@ private fun CustomerProfileContent(
             }
         }
 
+        message?.let {
+            ProfileMessageCard(message = it)
+        }
+
         HonestbeeCard {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                ProfileMenuRow(Icons.Outlined.AccountCircle, "Personal Information")
-                ProfileMenuRow(Icons.Outlined.LocationOn, "Address Book")
-                ProfileMenuRow(Icons.Outlined.CreditCard, "Payment Methods")
-                ProfileMenuRow(Icons.Outlined.Notifications, "Notifications")
-                ProfileMenuRow(Icons.Outlined.HelpOutline, "Help Center")
+                ProfileMenuRow(
+                    icon = Icons.Outlined.AccountCircle,
+                    title = "Personal Information",
+                    subtitle = "Name, phone, and email",
+                    onClick = { onOpenDialog(CustomerProfileDialog.PersonalInformation) }
+                )
+                ProfileMenuRow(
+                    icon = Icons.Outlined.LocationOn,
+                    title = "Address Book",
+                    subtitle = customerProfile?.address?.takeIf { it.isNotBlank() } ?: "Set your default delivery address",
+                    onClick = { onOpenDialog(CustomerProfileDialog.AddressBook) }
+                )
+                ProfileMenuRow(
+                    icon = Icons.Outlined.CreditCard,
+                    title = "Payment Methods",
+                    subtitle = defaultPaymentMethod,
+                    onClick = { onOpenDialog(CustomerProfileDialog.PaymentMethods) }
+                )
+                ProfileMenuRow(
+                    icon = Icons.Outlined.Notifications,
+                    title = "Notifications",
+                    subtitle = "Order, promo, and delivery alerts",
+                    onClick = { onOpenDialog(CustomerProfileDialog.Notifications) }
+                )
+                ProfileMenuRow(
+                    icon = Icons.Outlined.HelpOutline,
+                    title = "Help Center",
+                    subtitle = "FAQ and support contact",
+                    onClick = { onOpenDialog(CustomerProfileDialog.HelpCenter) }
+                )
                 ProfileMenuRow(
                     icon = Icons.Outlined.Logout,
                     title = "Logout",
+                    subtitle = "Sign out of this account",
                     onClick = onLogout
                 )
             }
@@ -720,9 +845,11 @@ private fun CustomerProfileEditDialog(
     profile: SessionProfile,
     customerProfile: CustomerProfile?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit
+    onSave: suspend (String, String, String) -> Result<String>,
+    onSaved: () -> Unit
 ) {
     val fallbackName = fullName(profile)
+    val scope = rememberCoroutineScope()
     var firstName by rememberSaveable(customerProfile?.uid) {
         mutableStateOf(customerProfile?.firstName?.ifBlank { fallbackName.substringBefore(" ") } ?: fallbackName.substringBefore(" "))
     }
@@ -732,44 +859,480 @@ private fun CustomerProfileEditDialog(
     var phone by rememberSaveable(customerProfile?.uid) {
         mutableStateOf(customerProfile?.phone.orEmpty())
     }
-    var address by rememberSaveable(customerProfile?.uid) {
-        mutableStateOf(customerProfile?.address.orEmpty())
-    }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSaving) onDismiss() },
         title = {
             Text(
-                text = "Edit Profile",
+                text = "Personal Information",
                 color = BeeDarkText,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 HonestbeeTextField(firstName, { firstName = it }, placeholder = "First name")
                 HonestbeeTextField(lastName, { lastName = it }, placeholder = "Last name")
                 HonestbeeTextField(phone, { phone = it }, placeholder = "Phone")
-                HonestbeeTextField(address, { address = it }, placeholder = "Address", singleLine = false)
+                HonestbeeTextField(
+                    value = profile.email,
+                    onValueChange = {},
+                    placeholder = "Email",
+                    enabled = false
+                )
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(firstName, lastName, phone, address) }
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(firstName, lastName, phone)
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not update personal information." }
+                    }
+                }
             ) {
-                Text("Save", color = BeeHoneyYellow, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
                 Text("Cancel", color = BeeMuted)
             }
         },
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun CustomerAddressDialog(
+    customerProfile: CustomerProfile?,
+    onDismiss: () -> Unit,
+    onSave: suspend (String) -> Result<String>,
+    onSaved: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var address by rememberSaveable(customerProfile?.uid) {
+        mutableStateOf(customerProfile?.address.orEmpty())
+    }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = {
+            Text(
+                text = "Address Book",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Default address",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = BeeMuted
+                )
+                HonestbeeTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    placeholder = "Address",
+                    singleLine = false
+                )
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(address)
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not update address." }
+                    }
+                }
+            ) {
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
+                Text("Cancel", color = BeeMuted)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun CustomerPaymentMethodsDialog(
+    selectedPaymentMethod: String,
+    onDismiss: () -> Unit,
+    onSave: suspend (String) -> Result<String>,
+    onSaved: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var selected by rememberSaveable(selectedPaymentMethod) { mutableStateOf(selectedPaymentMethod) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
+    val options = listOf("Cash on Delivery", "GCash", "Card placeholder")
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = {
+            Text(
+                text = "Payment Methods",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                options.forEach { option ->
+                    RadioOptionRow(
+                        title = option,
+                        subtitle = when (option) {
+                            "Cash on Delivery" -> "Pay when your delivery arrives"
+                            "GCash" -> "Android-only wallet preference"
+                            else -> "Card support placeholder"
+                        },
+                        selected = selected == option,
+                        onClick = { selected = option }
+                    )
+                }
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(selected)
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not update payment method." }
+                    }
+                }
+            ) {
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
+                Text("Cancel", color = BeeMuted)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun CustomerNotificationsDialog(
+    orderUpdates: Boolean,
+    promotions: Boolean,
+    deliveryAlerts: Boolean,
+    onDismiss: () -> Unit,
+    onSave: suspend (Boolean, Boolean, Boolean) -> Result<String>,
+    onSaved: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var orderUpdatesChecked by rememberSaveable(orderUpdates) { mutableStateOf(orderUpdates) }
+    var promotionsChecked by rememberSaveable(promotions) { mutableStateOf(promotions) }
+    var deliveryAlertsChecked by rememberSaveable(deliveryAlerts) { mutableStateOf(deliveryAlerts) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = {
+            Text(
+                text = "Notifications",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SettingsSwitchRow(
+                    title = "Order updates",
+                    subtitle = "Status changes and checkout reminders",
+                    checked = orderUpdatesChecked,
+                    onCheckedChange = { orderUpdatesChecked = it }
+                )
+                SettingsSwitchRow(
+                    title = "Promotions",
+                    subtitle = "Deals and app-only offers",
+                    checked = promotionsChecked,
+                    onCheckedChange = { promotionsChecked = it }
+                )
+                SettingsSwitchRow(
+                    title = "Delivery alerts",
+                    subtitle = "Rider and drop-off notifications",
+                    checked = deliveryAlertsChecked,
+                    onCheckedChange = { deliveryAlertsChecked = it }
+                )
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(
+                            orderUpdatesChecked,
+                            promotionsChecked,
+                            deliveryAlertsChecked
+                        )
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not save notification settings." }
+                    }
+                }
+            ) {
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
+                Text("Cancel", color = BeeMuted)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun CustomerHelpCenterDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Help Center",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                HelpFaqItem("How to place an order", "Open Stores, add items to your cart, then proceed to checkout.")
+                HelpFaqItem("How to track delivery", "Track delivery progress from My Orders after checkout.")
+                HelpFaqItem("How to cancel an order", "Open the order details and contact support before preparation starts.")
+                HelpFaqItem("How to contact support", "Email support@honestbee.app with your account email and order number.")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done", color = BeeHoneyYellow, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun RadioOptionRow(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = if (selected) BeeNavigationSelected else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, if (selected) BeeHoneyYellow else MaterialTheme.colorScheme.outline),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = selected, onClick = onClick)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = BeeDarkText,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BeeMuted
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = BeeDarkText,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = BeeMuted
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+private fun HelpFaqItem(
+    title: String,
+    answer: String
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = BeeDarkText,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = answer,
+            style = MaterialTheme.typography.bodyMedium,
+            color = BeeMuted
+        )
+    }
+}
+
+@Composable
+private fun ProfileMessageCard(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = BeeSuccess.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, BeeSuccess.copy(alpha = 0.30f)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = BeeSuccess,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun DialogStatusText(
+    message: String,
+    isError: Boolean
+) {
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (isError) BeeError else BeeSuccess,
+        fontWeight = FontWeight.SemiBold
     )
 }
 
@@ -993,6 +1556,7 @@ private fun CustomerOrderCard(order: AndroidOrder) {
 private fun ProfileMenuRow(
     icon: ImageVector,
     title: String,
+    subtitle: String? = null,
     onClick: () -> Unit = {}
 ) {
     Surface(
@@ -1004,8 +1568,8 @@ private fun ProfileMenuRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 4.dp),
+                .heightIn(min = 54.dp)
+                .padding(horizontal = 4.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1015,14 +1579,24 @@ private fun ProfileMenuRow(
                 tint = BeeHoneyYellow,
                 modifier = Modifier.size(22.dp)
             )
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                color = BeeDarkText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = BeeDarkText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BeeMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             Icon(
                 imageVector = Icons.Outlined.ChevronRight,
                 contentDescription = null,
@@ -1179,4 +1753,12 @@ private enum class CustomerTab(
     Cart("Cart", Icons.Outlined.ShoppingCart),
     Orders("Orders", Icons.Outlined.ReceiptLong),
     Profile("Profile", Icons.Outlined.Person)
+}
+
+private enum class CustomerProfileDialog {
+    PersonalInformation,
+    AddressBook,
+    PaymentMethods,
+    Notifications,
+    HelpCenter
 }

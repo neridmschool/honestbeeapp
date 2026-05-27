@@ -49,6 +49,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,10 +75,13 @@ import com.example.honestbeeapp.data.model.AndroidOrder
 import com.example.honestbeeapp.data.model.AndroidProduct
 import com.example.honestbeeapp.data.model.MerchantProfile
 import com.example.honestbeeapp.data.model.SessionProfile
+import com.example.honestbeeapp.data.repository.AuthRepository
+import com.example.honestbeeapp.data.repository.UserRepository
 import com.example.honestbeeapp.data.sample.AndroidSampleData
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
 import com.example.honestbeeapp.ui.components.HonestbeeOutlinedButton
+import com.example.honestbeeapp.ui.components.HonestbeePasswordField
 import com.example.honestbeeapp.ui.components.HonestbeeTextField
 import com.example.honestbeeapp.ui.components.SectionHeader
 import com.example.honestbeeapp.ui.components.StatusChip
@@ -89,11 +93,10 @@ import com.example.honestbeeapp.ui.theme.BeeHoneyYellow
 import com.example.honestbeeapp.ui.theme.BeeMuted
 import com.example.honestbeeapp.ui.theme.BeeNavigationSelected
 import com.example.honestbeeapp.ui.theme.BeePrimaryYellow
+import com.example.honestbeeapp.ui.theme.BeeSuccess
 import com.example.honestbeeapp.util.FirebaseConstants
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -120,8 +123,17 @@ fun MerchantMainScreen(
     }
     var editingProduct by remember { mutableStateOf<AndroidProduct?>(null) }
     var isAddingProduct by rememberSaveable { mutableStateOf(false) }
-    var isEditingProfile by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    var activeProfileDialog by rememberSaveable { mutableStateOf<MerchantProfileDialog?>(null) }
+    var profileMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var bankAccountName by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var bankName by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var bankAccountNumber by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var gcashNumber by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var storeOpen by rememberSaveable(profile.uid) { mutableStateOf(true) }
+    var acceptingOrders by rememberSaveable(profile.uid) { mutableStateOf(true) }
+    var lowStockAlerts by rememberSaveable(profile.uid) { mutableStateOf(true) }
+    val userRepository = remember(firestore) { UserRepository(firestore) }
+    val authRepository = remember { AuthRepository() }
 
     LaunchedEffect(profile.uid, firestore) {
         merchantProfile = runCatching {
@@ -131,6 +143,21 @@ fun MerchantMainScreen(
                 .await()
                 .toObject(MerchantProfile::class.java)
         }.getOrNull()
+
+        runCatching {
+            firestore.collection(FirebaseConstants.ANDROID_MERCHANT_SETTINGS)
+                .document(profile.uid)
+                .get()
+                .await()
+        }.onSuccess { document ->
+            bankAccountName = document.getString("accountName") ?: bankAccountName
+            bankName = document.getString("bankName") ?: bankName
+            bankAccountNumber = document.getString("accountNumber") ?: bankAccountNumber
+            gcashNumber = document.getString("gcashNumber") ?: gcashNumber
+            storeOpen = document.getBoolean("storeOpen") ?: storeOpen
+            acceptingOrders = document.getBoolean("acceptingOrders") ?: acceptingOrders
+            lowStockAlerts = document.getBoolean("lowStockAlerts") ?: lowStockAlerts
+        }
     }
 
     fun saveProduct(product: AndroidProduct) {
@@ -155,57 +182,135 @@ fun MerchantMainScreen(
         }
     }
 
-    fun saveMerchantProfile(
+    suspend fun saveMerchantProfile(
         storeName: String,
         ownerName: String,
         phone: String,
         address: String
-    ) {
-        scope.launch {
-            val cleanStoreName = storeName.trim()
-            val cleanOwnerName = ownerName.trim()
-            val cleanPhone = phone.trim()
-            val cleanAddress = address.trim()
-            val userUpdates = mapOf(
-                "username" to cleanOwnerName.ifBlank { cleanStoreName },
-                "phone" to cleanPhone,
-                "address" to cleanAddress,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-            val merchantUpdates = mapOf(
-                "uid" to profile.uid,
-                "email" to profile.email,
-                "storeName" to cleanStoreName,
-                "ownerName" to cleanOwnerName,
-                "phone" to cleanPhone,
-                "address" to cleanAddress,
-                "role" to FirebaseConstants.ROLE_MERCHANT,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
+    ): Result<String> {
+        val cleanStoreName = storeName.trim()
+        val cleanOwnerName = ownerName.trim()
+        val cleanPhone = phone.trim()
+        val cleanAddress = address.trim()
 
-            runCatching {
-                firestore.collection(FirebaseConstants.USERS)
-                    .document(profile.uid)
-                    .set(userUpdates, SetOptions.merge())
-                    .await()
-                firestore.collection(FirebaseConstants.MERCHANTS)
-                    .document(profile.uid)
-                    .set(merchantUpdates, SetOptions.merge())
-                    .await()
-            }.onSuccess {
-                merchantProfile = (merchantProfile ?: MerchantProfile(
-                    uid = profile.uid,
-                    email = profile.email,
-                    role = FirebaseConstants.ROLE_MERCHANT,
-                    status = profile.status
-                )).copy(
-                    storeName = cleanStoreName,
-                    ownerName = cleanOwnerName,
-                    phone = cleanPhone,
-                    address = cleanAddress
+        if (
+            cleanStoreName.isBlank() ||
+            cleanOwnerName.isBlank() ||
+            cleanPhone.isBlank() ||
+            cleanAddress.isBlank()
+        ) {
+            return Result.failure(IllegalArgumentException("Store name, owner name, phone, and address are required."))
+        }
+
+        return runCatching {
+            userRepository.updateMerchantProfile(
+                uid = profile.uid,
+                email = profile.email,
+                storeName = cleanStoreName,
+                ownerName = cleanOwnerName,
+                phone = cleanPhone,
+                address = cleanAddress
+            )
+        }.map {
+            merchantProfile = (merchantProfile ?: MerchantProfile(
+                uid = profile.uid,
+                email = profile.email,
+                role = FirebaseConstants.ROLE_MERCHANT,
+                status = profile.status
+            )).copy(
+                storeName = cleanStoreName,
+                ownerName = cleanOwnerName,
+                phone = cleanPhone,
+                address = cleanAddress
+            )
+            profileMessage = "Store information updated."
+            "Store information updated."
+        }
+    }
+
+    suspend fun saveMerchantBankInfo(
+        accountName: String,
+        selectedBankName: String,
+        accountNumber: String,
+        selectedGcashNumber: String
+    ): Result<String> {
+        val cleanAccountName = accountName.trim()
+        val cleanBankName = selectedBankName.trim()
+        val cleanAccountNumber = accountNumber.trim()
+        val cleanGcashNumber = selectedGcashNumber.trim()
+
+        if (
+            cleanAccountName.isBlank() ||
+            cleanBankName.isBlank() ||
+            cleanAccountNumber.isBlank() ||
+            cleanGcashNumber.isBlank()
+        ) {
+            return Result.failure(IllegalArgumentException("All bank information fields are required."))
+        }
+
+        return runCatching {
+            userRepository.updateMerchantBankInfo(
+                uid = profile.uid,
+                bankInfo = mapOf(
+                    "accountName" to cleanAccountName,
+                    "bankName" to cleanBankName,
+                    "accountNumber" to cleanAccountNumber,
+                    "gcashNumber" to cleanGcashNumber
                 )
-                isEditingProfile = false
-            }
+            )
+        }.map {
+            bankAccountName = cleanAccountName
+            bankName = cleanBankName
+            bankAccountNumber = cleanAccountNumber
+            gcashNumber = cleanGcashNumber
+            profileMessage = "Bank information saved."
+            "Bank information saved."
+        }
+    }
+
+    suspend fun saveMerchantSettings(
+        isStoreOpen: Boolean,
+        isAcceptingOrders: Boolean,
+        wantsLowStockAlerts: Boolean
+    ): Result<String> {
+        return runCatching {
+            userRepository.updateMerchantSettings(
+                uid = profile.uid,
+                settings = mapOf(
+                    "storeOpen" to isStoreOpen,
+                    "acceptingOrders" to isAcceptingOrders,
+                    "lowStockAlerts" to wantsLowStockAlerts
+                )
+            )
+        }.map {
+            storeOpen = isStoreOpen
+            acceptingOrders = isAcceptingOrders
+            lowStockAlerts = wantsLowStockAlerts
+            profileMessage = "Merchant settings saved."
+            "Merchant settings saved."
+        }
+    }
+
+    suspend fun changeMerchantPassword(
+        currentPassword: String,
+        newPassword: String,
+        confirmPassword: String
+    ): Result<String> {
+        if (currentPassword.isBlank()) {
+            return Result.failure(IllegalArgumentException("Current password is required."))
+        }
+        if (newPassword.length < 6) {
+            return Result.failure(IllegalArgumentException("New password must be at least 6 characters."))
+        }
+        if (newPassword != confirmPassword) {
+            return Result.failure(IllegalArgumentException("Confirm password must match the new password."))
+        }
+
+        return runCatching {
+            authRepository.updatePassword(currentPassword, newPassword)
+        }.map {
+            profileMessage = "Password updated."
+            "Password updated."
         }
     }
 
@@ -251,7 +356,15 @@ fun MerchantMainScreen(
                 MerchantTab.Profile -> MerchantProfileContent(
                     profile = profile,
                     merchantProfile = merchantProfile,
-                    onEditProfile = { isEditingProfile = true },
+                    message = profileMessage,
+                    maskedAccountNumber = maskAccountNumber(bankAccountNumber),
+                    storeOpen = storeOpen,
+                    acceptingOrders = acceptingOrders,
+                    onEditProfile = { activeProfileDialog = MerchantProfileDialog.StoreInformation },
+                    onOpenDialog = {
+                        profileMessage = null
+                        activeProfileDialog = it
+                    },
                     onLogout = onLogout
                 )
             }
@@ -270,13 +383,37 @@ fun MerchantMainScreen(
         )
     }
 
-    if (isEditingProfile) {
-        MerchantProfileEditDialog(
+    when (activeProfileDialog) {
+        MerchantProfileDialog.StoreInformation -> MerchantProfileEditDialog(
             profile = profile,
             merchantProfile = merchantProfile,
-            onDismiss = { isEditingProfile = false },
-            onSave = ::saveMerchantProfile
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::saveMerchantProfile,
+            onSaved = { activeProfileDialog = null }
         )
+        MerchantProfileDialog.BankInformation -> MerchantBankInformationDialog(
+            accountName = bankAccountName,
+            bankName = bankName,
+            accountNumber = bankAccountNumber,
+            gcashNumber = gcashNumber,
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::saveMerchantBankInfo,
+            onSaved = { activeProfileDialog = null }
+        )
+        MerchantProfileDialog.ChangePassword -> ChangePasswordDialog(
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::changeMerchantPassword,
+            onSaved = { activeProfileDialog = null }
+        )
+        MerchantProfileDialog.Settings -> MerchantSettingsDialog(
+            storeOpen = storeOpen,
+            acceptingOrders = acceptingOrders,
+            lowStockAlerts = lowStockAlerts,
+            onDismiss = { activeProfileDialog = null },
+            onSave = ::saveMerchantSettings,
+            onSaved = { activeProfileDialog = null }
+        )
+        null -> Unit
     }
 }
 
@@ -498,7 +635,12 @@ private fun MerchantOrdersContent(
 private fun MerchantProfileContent(
     profile: SessionProfile,
     merchantProfile: MerchantProfile?,
+    message: String?,
+    maskedAccountNumber: String,
+    storeOpen: Boolean,
+    acceptingOrders: Boolean,
     onEditProfile: () -> Unit,
+    onOpenDialog: (MerchantProfileDialog) -> Unit,
     onLogout: () -> Unit
 ) {
     val name = storeName(profile, merchantProfile)
@@ -561,15 +703,40 @@ private fun MerchantProfileContent(
             }
         }
 
+        message?.let {
+            ProfileMessageCard(message = it)
+        }
+
         HonestbeeCard {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                ProfileMenuRow(Icons.Outlined.Storefront, "Store Information")
-                ProfileMenuRow(Icons.Outlined.AccountBalance, "Bank Information")
-                ProfileMenuRow(Icons.Outlined.Lock, "Change Password")
-                ProfileMenuRow(Icons.Outlined.Settings, "Settings")
+                ProfileMenuRow(
+                    icon = Icons.Outlined.Storefront,
+                    title = "Store Information",
+                    subtitle = merchantProfile?.address?.takeIf { it.isNotBlank() } ?: "Store name, owner, phone, and address",
+                    onClick = { onOpenDialog(MerchantProfileDialog.StoreInformation) }
+                )
+                ProfileMenuRow(
+                    icon = Icons.Outlined.AccountBalance,
+                    title = "Bank Information",
+                    subtitle = if (maskedAccountNumber.isBlank()) "Add payout details" else "Saved account $maskedAccountNumber",
+                    onClick = { onOpenDialog(MerchantProfileDialog.BankInformation) }
+                )
+                ProfileMenuRow(
+                    icon = Icons.Outlined.Lock,
+                    title = "Change Password",
+                    subtitle = "Update your sign-in password",
+                    onClick = { onOpenDialog(MerchantProfileDialog.ChangePassword) }
+                )
+                ProfileMenuRow(
+                    icon = Icons.Outlined.Settings,
+                    title = "Settings",
+                    subtitle = "${if (storeOpen) "Open" else "Closed"} - ${if (acceptingOrders) "accepting orders" else "not accepting orders"}",
+                    onClick = { onOpenDialog(MerchantProfileDialog.Settings) }
+                )
                 ProfileMenuRow(
                     icon = Icons.Outlined.Logout,
                     title = "Logout",
+                    subtitle = "Sign out of this account",
                     onClick = onLogout
                 )
             }
@@ -582,8 +749,10 @@ private fun MerchantProfileEditDialog(
     profile: SessionProfile,
     merchantProfile: MerchantProfile?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit
+    onSave: suspend (String, String, String, String) -> Result<String>,
+    onSaved: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     var storeName by rememberSaveable(merchantProfile?.uid) {
         mutableStateOf(merchantProfile?.storeName?.ifBlank { storeName(profile, merchantProfile) } ?: storeName(profile, merchantProfile))
     }
@@ -596,41 +765,413 @@ private fun MerchantProfileEditDialog(
     var address by rememberSaveable(merchantProfile?.uid) {
         mutableStateOf(merchantProfile?.address.orEmpty())
     }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSaving) onDismiss() },
         title = {
             Text(
-                text = "Edit Store Profile",
+                text = "Store Information",
                 color = BeeDarkText,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 HonestbeeTextField(storeName, { storeName = it }, placeholder = "Store name")
                 HonestbeeTextField(ownerName, { ownerName = it }, placeholder = "Owner name")
                 HonestbeeTextField(phone, { phone = it }, placeholder = "Phone")
                 HonestbeeTextField(address, { address = it }, placeholder = "Address", singleLine = false)
+                HonestbeeTextField(
+                    value = profile.email,
+                    onValueChange = {},
+                    placeholder = "Email",
+                    enabled = false
+                )
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(storeName, ownerName, phone, address) }
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(storeName, ownerName, phone, address)
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not update store information." }
+                    }
+                }
             ) {
-                Text("Save", color = BeeHoneyYellow, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
                 Text("Cancel", color = BeeMuted)
             }
         },
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun MerchantBankInformationDialog(
+    accountName: String,
+    bankName: String,
+    accountNumber: String,
+    gcashNumber: String,
+    onDismiss: () -> Unit,
+    onSave: suspend (String, String, String, String) -> Result<String>,
+    onSaved: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var accountNameInput by rememberSaveable(accountName) { mutableStateOf(accountName) }
+    var bankNameInput by rememberSaveable(bankName) { mutableStateOf(bankName) }
+    var accountNumberInput by rememberSaveable(accountNumber) { mutableStateOf(accountNumber) }
+    var gcashNumberInput by rememberSaveable(gcashNumber) { mutableStateOf(gcashNumber) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = {
+            Text(
+                text = "Bank Information",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (accountNumberInput.isNotBlank()) {
+                    Text(
+                        text = "Current account: ${maskAccountNumber(accountNumberInput)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BeeMuted
+                    )
+                }
+                HonestbeeTextField(accountNameInput, { accountNameInput = it }, placeholder = "Account name")
+                HonestbeeTextField(bankNameInput, { bankNameInput = it }, placeholder = "Bank name")
+                HonestbeeTextField(
+                    value = accountNumberInput,
+                    onValueChange = { accountNumberInput = it },
+                    placeholder = "Account number",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                HonestbeeTextField(
+                    value = gcashNumberInput,
+                    onValueChange = { gcashNumberInput = it },
+                    placeholder = "GCash number",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                )
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(
+                            accountNameInput,
+                            bankNameInput,
+                            accountNumberInput,
+                            gcashNumberInput
+                        )
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not save bank information." }
+                    }
+                }
+            ) {
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
+                Text("Cancel", color = BeeMuted)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun ChangePasswordDialog(
+    onDismiss: () -> Unit,
+    onSave: suspend (String, String, String) -> Result<String>,
+    onSaved: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var currentPassword by rememberSaveable { mutableStateOf("") }
+    var newPassword by rememberSaveable { mutableStateOf("") }
+    var confirmPassword by rememberSaveable { mutableStateOf("") }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = {
+            Text(
+                text = "Change Password",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HonestbeePasswordField(
+                    value = currentPassword,
+                    onValueChange = { currentPassword = it },
+                    placeholder = "Current password"
+                )
+                HonestbeePasswordField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    placeholder = "New password"
+                )
+                HonestbeePasswordField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    placeholder = "Confirm new password"
+                )
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(currentPassword, newPassword, confirmPassword)
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not change password." }
+                    }
+                }
+            ) {
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
+                Text("Cancel", color = BeeMuted)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun MerchantSettingsDialog(
+    storeOpen: Boolean,
+    acceptingOrders: Boolean,
+    lowStockAlerts: Boolean,
+    onDismiss: () -> Unit,
+    onSave: suspend (Boolean, Boolean, Boolean) -> Result<String>,
+    onSaved: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var storeOpenChecked by rememberSaveable(storeOpen) { mutableStateOf(storeOpen) }
+    var acceptingOrdersChecked by rememberSaveable(acceptingOrders) { mutableStateOf(acceptingOrders) }
+    var lowStockAlertsChecked by rememberSaveable(lowStockAlerts) { mutableStateOf(lowStockAlerts) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSaving by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = {
+            Text(
+                text = "Merchant Settings",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SettingsSwitchRow(
+                    title = "Store Open/Closed",
+                    subtitle = if (storeOpenChecked) "Store is visible as open" else "Store is marked closed",
+                    checked = storeOpenChecked,
+                    onCheckedChange = { storeOpenChecked = it }
+                )
+                SettingsSwitchRow(
+                    title = "Accepting Orders",
+                    subtitle = "Android-only order intake preference",
+                    checked = acceptingOrdersChecked,
+                    onCheckedChange = { acceptingOrdersChecked = it }
+                )
+                SettingsSwitchRow(
+                    title = "Low Stock Alerts",
+                    subtitle = "Get reminders when sample stock is low",
+                    checked = lowStockAlertsChecked,
+                    onCheckedChange = { lowStockAlertsChecked = it }
+                )
+                errorMessage?.let {
+                    DialogStatusText(message = it, isError = true)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = {
+                    if (isSaving) return@TextButton
+                    errorMessage = null
+                    isSaving = true
+                    scope.launch {
+                        val result = onSave(
+                            storeOpenChecked,
+                            acceptingOrdersChecked,
+                            lowStockAlertsChecked
+                        )
+                        isSaving = false
+                        result.onSuccess { onSaved() }
+                            .onFailure { errorMessage = it.message ?: "Could not save merchant settings." }
+                    }
+                }
+            ) {
+                Text(
+                    text = if (isSaving) "Saving..." else "Save",
+                    color = BeeHoneyYellow,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !isSaving,
+                onClick = onDismiss
+            ) {
+                Text("Cancel", color = BeeMuted)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun SettingsSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = BeeDarkText,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = BeeMuted
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+private fun ProfileMessageCard(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = BeeSuccess.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, BeeSuccess.copy(alpha = 0.30f)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = BeeSuccess,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun DialogStatusText(
+    message: String,
+    isError: Boolean
+) {
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (isError) BeeError else BeeSuccess,
+        fontWeight = FontWeight.SemiBold
     )
 }
 
@@ -944,6 +1485,7 @@ private fun ProductEditorDialog(
 private fun ProfileMenuRow(
     icon: ImageVector,
     title: String,
+    subtitle: String? = null,
     onClick: () -> Unit = {}
 ) {
     Surface(
@@ -955,8 +1497,8 @@ private fun ProfileMenuRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 4.dp),
+                .heightIn(min = 54.dp)
+                .padding(horizontal = 4.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -966,14 +1508,24 @@ private fun ProfileMenuRow(
                 tint = BeeHoneyYellow,
                 modifier = Modifier.size(22.dp)
             )
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                color = BeeDarkText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = BeeDarkText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BeeMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             Icon(
                 imageVector = Icons.Outlined.ChevronRight,
                 contentDescription = null,
@@ -1089,6 +1641,13 @@ private fun formatOrderTime(timestamp: Timestamp?): String {
         .format(Date(timestamp.seconds * 1000))
 }
 
+private fun maskAccountNumber(accountNumber: String): String {
+    val clean = accountNumber.trim()
+    if (clean.isBlank()) return ""
+    val visible = clean.takeLast(4)
+    return "****$visible"
+}
+
 private enum class MerchantTab(
     val title: String,
     val icon: ImageVector
@@ -1097,4 +1656,11 @@ private enum class MerchantTab(
     Products("Products", Icons.Outlined.Inventory2),
     Orders("Orders", Icons.Outlined.ReceiptLong),
     Profile("Profile", Icons.Outlined.Person)
+}
+
+private enum class MerchantProfileDialog {
+    StoreInformation,
+    BankInformation,
+    ChangePassword,
+    Settings
 }

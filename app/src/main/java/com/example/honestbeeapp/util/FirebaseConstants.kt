@@ -12,6 +12,9 @@ object FirebaseConstants {
     const val ANDROID_PRODUCTS = "android_products"
     const val ANDROID_CART = "android_cart"
     const val ANDROID_ORDERS = "android_orders"
+    const val ANDROID_CUSTOMER_SETTINGS = "android_customer_settings"
+    const val ANDROID_MERCHANT_SETTINGS = "android_merchant_settings"
+    const val ANDROID_RIDER_SETTINGS = "android_rider_settings"
 
     // Roles
     const val ROLE_CUSTOMER = "customer"
