@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -31,11 +31,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil.compose.SubcomposeAsyncImage
 import com.example.honestbeeapp.ui.theme.BeeCream
 import com.example.honestbeeapp.ui.theme.BeeDarkText
 import com.example.honestbeeapp.ui.theme.BeeError
@@ -85,10 +89,11 @@ fun ProductCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ImagePlaceholder(
+            HonestbeeRemoteImage(
+                imageUrl = imageUrl,
                 modifier = Modifier.size(78.dp),
                 icon = Icons.Outlined.Restaurant,
-                contentDescription = if (imageUrl.isBlank()) "$productName placeholder" else "$productName image"
+                contentDescription = "$productName image"
             )
 
             Column(
@@ -157,12 +162,13 @@ fun StoreCard(
         shadowElevation = 2.dp
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            ImagePlaceholder(
+            HonestbeeRemoteImage(
+                imageUrl = imageUrl,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(2.8f),
+                    .height(132.dp),
                 icon = Icons.Outlined.Storefront,
-                contentDescription = if (imageUrl.isBlank()) "$storeName placeholder" else "$storeName image"
+                contentDescription = "$storeName image"
             )
             Spacer(Modifier.height(12.dp))
             Text(
@@ -204,6 +210,7 @@ fun OrderCard(
     totalAmount: Double,
     status: String,
     modifier: Modifier = Modifier,
+    imageUrl: String = "",
     onViewDetailsClick: () -> Unit
 ) {
     HonestbeeCard(modifier = modifier) {
@@ -212,10 +219,11 @@ fun OrderCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ImagePlaceholder(
+                HonestbeeRemoteImage(
+                    imageUrl = imageUrl,
                     modifier = Modifier.size(46.dp),
                     icon = Icons.Outlined.ReceiptLong,
-                    contentDescription = "Order"
+                    contentDescription = "$orderNumber image"
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -298,6 +306,49 @@ fun EmptyStateCard(
             }
         }
     }
+}
+
+@Composable
+fun HonestbeeRemoteImage(
+    imageUrl: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Outlined.Image,
+    cornerRadius: Dp = 10.dp
+) {
+    val shape = RoundedCornerShape(cornerRadius)
+
+    if (imageUrl.isBlank()) {
+        ImagePlaceholder(
+            modifier = modifier,
+            icon = icon,
+            contentDescription = contentDescription
+        )
+        return
+    }
+
+    SubcomposeAsyncImage(
+        model = imageUrl,
+        contentDescription = contentDescription,
+        modifier = modifier
+            .clip(shape)
+            .background(BeeCream),
+        contentScale = ContentScale.Crop,
+        loading = {
+            ImagePlaceholder(
+                modifier = Modifier.fillMaxSize(),
+                icon = icon,
+                contentDescription = contentDescription
+            )
+        },
+        error = {
+            ImagePlaceholder(
+                modifier = Modifier.fillMaxSize(),
+                icon = icon,
+                contentDescription = contentDescription
+            )
+        }
+    )
 }
 
 @Composable

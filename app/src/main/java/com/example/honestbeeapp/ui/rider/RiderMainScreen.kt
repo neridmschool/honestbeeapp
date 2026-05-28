@@ -75,8 +75,10 @@ import com.example.honestbeeapp.data.sample.AndroidSampleData
 import com.example.honestbeeapp.data.sample.SampleRiderJob
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
+import com.example.honestbeeapp.ui.components.HonestbeeLogo
 import com.example.honestbeeapp.ui.components.HonestbeeOutlinedButton
 import com.example.honestbeeapp.ui.components.HonestbeePasswordField
+import com.example.honestbeeapp.ui.components.HonestbeeRemoteImage
 import com.example.honestbeeapp.ui.components.HonestbeeTextField
 import com.example.honestbeeapp.ui.components.StatusChip
 import com.example.honestbeeapp.ui.components.formatSamplePeso
@@ -382,9 +384,11 @@ private fun RiderTopHeader(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            HonestbeeLogo(modifier = Modifier.size(42.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (selectedTab == RiderTab.Available) {
@@ -504,9 +508,15 @@ private fun CurrentDeliveryScreen(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    HonestbeeRemoteImage(
+                        imageUrl = riderJobStoreImageUrl(job),
+                        contentDescription = "${job.storeName} image",
+                        modifier = Modifier.size(54.dp),
+                        icon = Icons.Outlined.LocalShipping
+                    )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = job.orderId,
@@ -1159,9 +1169,15 @@ private fun AvailableJobCard(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                HonestbeeRemoteImage(
+                    imageUrl = riderJobStoreImageUrl(job),
+                    contentDescription = "${job.storeName} image",
+                    modifier = Modifier.size(54.dp),
+                    icon = Icons.Outlined.LocalShipping
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = job.orderId,
@@ -1205,9 +1221,15 @@ private fun HistoryJobCard(job: SampleRiderJob) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                HonestbeeRemoteImage(
+                    imageUrl = riderJobStoreImageUrl(job),
+                    contentDescription = "${job.storeName} image",
+                    modifier = Modifier.size(54.dp),
+                    icon = Icons.Outlined.LocalShipping
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = job.orderId,
@@ -1232,6 +1254,13 @@ private fun HistoryJobCard(job: SampleRiderJob) {
             InfoRow("Earning", formatSamplePeso(job.payout))
         }
     }
+}
+
+private fun riderJobStoreImageUrl(job: SampleRiderJob): String {
+    return AndroidSampleData.stores
+        .firstOrNull { it.storeName == job.storeName }
+        ?.imageUrl
+        .orEmpty()
 }
 
 @Composable

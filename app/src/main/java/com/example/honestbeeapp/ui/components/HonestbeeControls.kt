@@ -119,6 +119,7 @@ fun HonestbeeTextField(
     placeholder: String = "",
     leadingIcon: ImageVector? = null,
     enabled: Boolean = true,
+    errorText: String? = null,
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
@@ -142,6 +143,15 @@ fun HonestbeeTextField(
                 )
             }
         },
+        isError = errorText != null,
+        supportingText = errorText?.let { message ->
+            {
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        },
         singleLine = singleLine,
         keyboardOptions = keyboardOptions,
         shape = RoundedCornerShape(8.dp),
@@ -156,7 +166,8 @@ fun HonestbeePasswordField(
     modifier: Modifier = Modifier,
     placeholder: String = "Password",
     leadingIcon: ImageVector? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    errorText: String? = null
 ) {
     var isPasswordVisible by rememberSaveable { mutableStateOf(false) }
 
@@ -186,6 +197,15 @@ fun HonestbeePasswordField(
                     imageVector = if (isPasswordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                     contentDescription = if (isPasswordVisible) "Hide password" else "Show password",
                     tint = BeeMuted
+                )
+            }
+        },
+        isError = errorText != null,
+        supportingText = errorText?.let { message ->
+            {
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         },
@@ -226,6 +246,10 @@ private fun honestbeeTextFieldColors() = OutlinedTextFieldDefaults.colors(
     disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
     focusedBorderColor = BeeHoneyYellow,
     unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    errorBorderColor = MaterialTheme.colorScheme.error,
+    errorLabelColor = MaterialTheme.colorScheme.error,
+    errorSupportingTextColor = MaterialTheme.colorScheme.error,
+    errorCursorColor = MaterialTheme.colorScheme.error,
     cursorColor = BeeHoneyYellow,
     focusedLeadingIconColor = BeeHoneyYellow,
     unfocusedLeadingIconColor = BeeMuted,

@@ -80,7 +80,9 @@ import com.example.honestbeeapp.data.repository.UserRepository
 import com.example.honestbeeapp.data.sample.AndroidSampleData
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
+import com.example.honestbeeapp.ui.components.HonestbeeLogo
 import com.example.honestbeeapp.ui.components.HonestbeeOutlinedButton
+import com.example.honestbeeapp.ui.components.HonestbeeRemoteImage
 import com.example.honestbeeapp.ui.components.HonestbeeTextField
 import com.example.honestbeeapp.ui.components.ProductCard
 import com.example.honestbeeapp.ui.components.SectionHeader
@@ -402,9 +404,11 @@ private fun CustomerTopHeader(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                HonestbeeLogo(modifier = Modifier.size(42.dp))
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (selectedTab == CustomerTab.Home) {
@@ -510,6 +514,7 @@ private fun CustomerHomeContent() {
                     rating = store.rating,
                     deliveryTime = store.deliveryTime,
                     minimumOrder = store.minimumOrder,
+                    imageUrl = store.imageUrl,
                     modifier = Modifier.width(245.dp)
                 )
             }
@@ -534,6 +539,7 @@ private fun CustomerHomeContent() {
             ProductCard(
                 productName = product.productName,
                 price = product.price,
+                imageUrl = product.imageUrl,
                 isAvailable = product.isAvailable,
                 onAddClick = {}
             )
@@ -584,7 +590,8 @@ private fun CustomerStoresContent() {
                 storeName = store.storeName,
                 rating = store.rating,
                 deliveryTime = store.deliveryTime,
-                minimumOrder = store.minimumOrder
+                minimumOrder = store.minimumOrder,
+                imageUrl = store.imageUrl
             )
         }
     }
@@ -1396,19 +1403,12 @@ private fun CustomerCartItemCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(BeeCream),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.ShoppingCart,
-                    contentDescription = null,
-                    tint = BeeHoneyYellow
-                )
-            }
+            HonestbeeRemoteImage(
+                imageUrl = item.imageUrl,
+                contentDescription = "${item.productName} image",
+                modifier = Modifier.size(58.dp),
+                icon = Icons.Outlined.ShoppingCart
+            )
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -1502,9 +1502,15 @@ private fun CustomerOrderCard(order: AndroidOrder) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                HonestbeeRemoteImage(
+                    imageUrl = orderStoreImageUrl(order),
+                    contentDescription = "${order.storeName} image",
+                    modifier = Modifier.size(54.dp),
+                    icon = Icons.Outlined.Storefront
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = order.orderId,
@@ -1550,6 +1556,13 @@ private fun CustomerOrderCard(order: AndroidOrder) {
             }
         }
     }
+}
+
+private fun orderStoreImageUrl(order: AndroidOrder): String {
+    return AndroidSampleData.stores
+        .firstOrNull { it.storeId == order.merchantId || it.storeName == order.storeName }
+        ?.imageUrl
+        .orEmpty()
 }
 
 @Composable

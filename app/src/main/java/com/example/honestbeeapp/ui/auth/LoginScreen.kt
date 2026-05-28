@@ -43,7 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import com.example.honestbeeapp.ui.components.ErrorMessage
+import com.example.honestbeeapp.ui.components.HonestbeeLogo
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
 import com.example.honestbeeapp.ui.components.HonestbeePasswordField
@@ -59,25 +61,18 @@ import com.google.firebase.auth.FirebaseAuth
 @Composable
 fun LoginScreen(
     onSignedIn: () -> Unit,
+    onBackToWelcome: () -> Unit,
     initialMessage: String? = null,
     auth: FirebaseAuth = remember { FirebaseAuth.getInstance() }
 ) {
-    var showRegister by rememberSaveable { mutableStateOf(false) }
-
-    if (showRegister) {
-        RegisterScreen(
-            onRegistered = onSignedIn,
-            onBackToLogin = { showRegister = false }
-        )
-        return
-    }
-
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var rememberMe by rememberSaveable { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var isMessageError by remember { mutableStateOf(true) }
+
+    BackHandler(onBack = onBackToWelcome)
 
     LaunchedEffect(initialMessage) {
         if (!initialMessage.isNullOrBlank()) {
@@ -232,13 +227,13 @@ fun LoginScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "No account yet?",
+                            text = "Not ready to log in?",
                             style = MaterialTheme.typography.bodyMedium,
                             color = BeeMuted
                         )
-                        TextButton(onClick = { showRegister = true }) {
+                        TextButton(onClick = onBackToWelcome) {
                             Text(
-                                text = "Register",
+                                text = "Back to welcome",
                                 color = BeeHoneyYellow,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -272,32 +267,7 @@ private fun LoginMessage(message: String) {
 
 @Composable
 private fun LoginLogo() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Surface(
-            modifier = Modifier.size(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            color = BeePrimaryYellow,
-            border = BorderStroke(1.dp, BeeHoneyYellow)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = "hb",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = BeeDarkText
-                )
-            }
-        }
-        Text(
-            text = "honestbee",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = BeeDarkText
-        )
-    }
+    HonestbeeLogo(modifier = Modifier.size(104.dp))
 }
 
 @Composable

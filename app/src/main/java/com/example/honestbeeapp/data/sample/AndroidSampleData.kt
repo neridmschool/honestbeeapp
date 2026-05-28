@@ -20,11 +20,39 @@ object AndroidSampleData {
         "Household"
     )
 
+    private const val STORE_FRESH_MART_IMAGE = "https://loremflickr.com/640/420/grocery,store,produce?lock=801"
+    private const val STORE_GREEN_BASKET_IMAGE = "https://loremflickr.com/640/420/farmers,market,vegetables?lock=802"
+    private const val STORE_DAILY_NEEDS_IMAGE = "https://loremflickr.com/640/420/convenience,store,shelves?lock=803"
+    private const val STORE_LOCAL_MARKET_IMAGE = "https://loremflickr.com/640/420/local,market,food?lock=804"
+    private const val STORE_BEE_GROCERY_IMAGE = "https://loremflickr.com/640/420/supermarket,aisle,grocery?lock=805"
+
+    private const val BANANAS_IMAGE = "https://loremflickr.com/640/480/bananas,fruit?lock=101"
+    private const val ROYAL_ORANGE_IMAGE = "https://loremflickr.com/640/480/orange,soda,drink?lock=102"
+    private const val OREO_COOKIES_IMAGE = "https://loremflickr.com/640/480/chocolate,cookies,snack?lock=103"
+    private const val FRESH_APPLES_IMAGE = "https://loremflickr.com/640/480/apples,fruit?lock=104"
+    private const val PREMIUM_RICE_IMAGE = "https://loremflickr.com/640/480/rice,grain,food?lock=105"
+    private const val COCA_COLA_IMAGE = "https://loremflickr.com/640/480/cola,soda,drink?lock=106"
+    private const val CHICKEN_BREAST_IMAGE = "https://loremflickr.com/640/480/chicken,meat,food?lock=107"
+    private const val MILK_IMAGE = "https://loremflickr.com/640/480/milk,dairy?lock=108"
+    private const val EGGS_IMAGE = "https://loremflickr.com/640/480/eggs,food?lock=109"
+    private const val BREAD_IMAGE = "https://loremflickr.com/640/480/bread,bakery?lock=110"
+    private const val DETERGENT_IMAGE = "https://loremflickr.com/640/480/laundry,detergent?lock=111"
+    private const val CANNED_TUNA_IMAGE = "https://loremflickr.com/640/480/canned,food?lock=112"
+    private const val INSTANT_NOODLES_IMAGE = "https://loremflickr.com/640/480/noodles,food?lock=113"
+    private const val COFFEE_IMAGE = "https://loremflickr.com/640/480/coffee,jar?lock=114"
+    private const val COOKING_OIL_IMAGE = "https://loremflickr.com/640/480/cooking,oil,kitchen?lock=115"
+    private const val SUGAR_IMAGE = "https://loremflickr.com/640/480/sugar,food?lock=116"
+    private const val POTATO_CHIPS_IMAGE = "https://loremflickr.com/640/480/potato,chips,snack?lock=117"
+    private const val CARROTS_IMAGE = "https://loremflickr.com/640/480/carrots,vegetables?lock=118"
+    private const val LETTUCE_IMAGE = "https://loremflickr.com/640/480/lettuce,vegetables?lock=119"
+    private const val YOGURT_IMAGE = "https://loremflickr.com/640/480/yogurt,dairy?lock=120"
+
     val stores = listOf(
         AndroidStore(
             storeId = "store_fresh_mart",
             storeName = "Fresh Mart",
             category = "Grocery",
+            imageUrl = STORE_FRESH_MART_IMAGE,
             address = "12 Honey Avenue, Quezon City",
             rating = 4.8,
             deliveryTime = "20-30 min",
@@ -36,6 +64,7 @@ object AndroidSampleData {
             storeId = "store_green_basket",
             storeName = "Green Basket",
             category = "Fresh Produce",
+            imageUrl = STORE_GREEN_BASKET_IMAGE,
             address = "88 Market Road, Makati",
             rating = 4.7,
             deliveryTime = "25-35 min",
@@ -47,6 +76,7 @@ object AndroidSampleData {
             storeId = "store_daily_needs",
             storeName = "Daily Needs",
             category = "Convenience",
+            imageUrl = STORE_DAILY_NEEDS_IMAGE,
             address = "45 Sunrise Street, Pasig",
             rating = 4.6,
             deliveryTime = "15-25 min",
@@ -58,6 +88,7 @@ object AndroidSampleData {
             storeId = "store_local_market",
             storeName = "Local Market",
             category = "Meat and Pantry",
+            imageUrl = STORE_LOCAL_MARKET_IMAGE,
             address = "21 Barangay Plaza, Manila",
             rating = 4.5,
             deliveryTime = "30-45 min",
@@ -69,6 +100,7 @@ object AndroidSampleData {
             storeId = "store_bee_grocery",
             storeName = "Bee Grocery",
             category = "Supermarket",
+            imageUrl = STORE_BEE_GROCERY_IMAGE,
             address = "9 Golden Lane, Taguig",
             rating = 4.9,
             deliveryTime = "20-35 min",
@@ -88,6 +120,7 @@ object AndroidSampleData {
             stock = 60,
             unit = "1 kg",
             description = "Sweet ripe bananas for snacks and smoothies.",
+            imageUrl = BANANAS_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -99,6 +132,7 @@ object AndroidSampleData {
             stock = 34,
             unit = "1.5L",
             description = "Bright orange soda for family meals.",
+            imageUrl = ROYAL_ORANGE_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -110,6 +144,7 @@ object AndroidSampleData {
             stock = 42,
             unit = "pack",
             description = "Chocolate sandwich cookies.",
+            imageUrl = OREO_COOKIES_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -121,6 +156,7 @@ object AndroidSampleData {
             stock = 48,
             unit = "1 kg",
             description = "Crisp apples for lunch boxes and desserts.",
+            imageUrl = FRESH_APPLES_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -132,6 +168,7 @@ object AndroidSampleData {
             stock = 24,
             unit = "5 kg",
             description = "Soft and fluffy premium white rice.",
+            imageUrl = PREMIUM_RICE_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -143,6 +180,7 @@ object AndroidSampleData {
             stock = 36,
             unit = "1.5L",
             description = "Classic cola drink.",
+            imageUrl = COCA_COLA_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -154,6 +192,7 @@ object AndroidSampleData {
             stock = 18,
             unit = "1 kg",
             description = "Fresh boneless chicken breast.",
+            imageUrl = CHICKEN_BREAST_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -165,6 +204,7 @@ object AndroidSampleData {
             stock = 40,
             unit = "1L",
             description = "Creamy fresh milk.",
+            imageUrl = MILK_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -176,6 +216,7 @@ object AndroidSampleData {
             stock = 30,
             unit = "dozen",
             description = "Farm fresh medium eggs.",
+            imageUrl = EGGS_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -187,6 +228,7 @@ object AndroidSampleData {
             stock = 28,
             unit = "loaf",
             description = "Soft white sandwich bread.",
+            imageUrl = BREAD_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -198,6 +240,7 @@ object AndroidSampleData {
             stock = 22,
             unit = "1 kg",
             description = "Laundry detergent powder.",
+            imageUrl = DETERGENT_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -209,6 +252,7 @@ object AndroidSampleData {
             stock = 52,
             unit = "can",
             description = "Ready-to-eat tuna flakes.",
+            imageUrl = CANNED_TUNA_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -220,6 +264,7 @@ object AndroidSampleData {
             stock = 90,
             unit = "pack",
             description = "Quick noodle pack for busy days.",
+            imageUrl = INSTANT_NOODLES_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -231,6 +276,7 @@ object AndroidSampleData {
             stock = 26,
             unit = "jar",
             description = "Rich instant coffee.",
+            imageUrl = COFFEE_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -242,6 +288,7 @@ object AndroidSampleData {
             stock = 20,
             unit = "1L",
             description = "All-purpose cooking oil.",
+            imageUrl = COOKING_OIL_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -253,6 +300,7 @@ object AndroidSampleData {
             stock = 44,
             unit = "1 kg",
             description = "Refined white sugar.",
+            imageUrl = SUGAR_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -264,6 +312,7 @@ object AndroidSampleData {
             stock = 39,
             unit = "bag",
             description = "Crunchy salted potato chips.",
+            imageUrl = POTATO_CHIPS_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -275,6 +324,7 @@ object AndroidSampleData {
             stock = 33,
             unit = "500 g",
             description = "Fresh carrots for soups and salads.",
+            imageUrl = CARROTS_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -286,6 +336,7 @@ object AndroidSampleData {
             stock = 21,
             unit = "head",
             description = "Crisp green lettuce.",
+            imageUrl = LETTUCE_IMAGE,
             isAvailable = true
         ),
         AndroidProduct(
@@ -297,6 +348,7 @@ object AndroidSampleData {
             stock = 37,
             unit = "cup",
             description = "Creamy yogurt cup.",
+            imageUrl = YOGURT_IMAGE,
             isAvailable = true
         )
     )
@@ -309,6 +361,7 @@ object AndroidSampleData {
             productName = "Bananas",
             price = 89.0,
             quantity = 2,
+            imageUrl = BANANAS_IMAGE,
             subtotal = 178.0
         ),
         AndroidCartItem(
@@ -318,6 +371,7 @@ object AndroidSampleData {
             productName = "Milk",
             price = 95.0,
             quantity = 1,
+            imageUrl = MILK_IMAGE,
             subtotal = 95.0
         ),
         AndroidCartItem(
@@ -327,6 +381,7 @@ object AndroidSampleData {
             productName = "Bread",
             price = 72.0,
             quantity = 1,
+            imageUrl = BREAD_IMAGE,
             subtotal = 72.0
         )
     )
@@ -361,8 +416,8 @@ object AndroidSampleData {
             deliveryAddress = "Ortigas Center, Pasig",
             createdAt = Timestamp(1716703200L, 0),
             items = listOf(
-                AndroidCartItem("cart_rice", "prod_premium_rice", "store_bee_grocery", "Premium Rice 5kg", 325.0, 1, "", 325.0),
-                AndroidCartItem("cart_milk_order", "prod_milk", "store_bee_grocery", "Milk", 95.0, 1, "", 95.0)
+                AndroidCartItem("cart_rice", "prod_premium_rice", "store_bee_grocery", "Premium Rice 5kg", 325.0, 1, PREMIUM_RICE_IMAGE, 325.0),
+                AndroidCartItem("cart_milk_order", "prod_milk", "store_bee_grocery", "Milk", 95.0, 1, MILK_IMAGE, 95.0)
             )
         ),
         AndroidOrder(
@@ -379,8 +434,8 @@ object AndroidSampleData {
             deliveryAddress = "Ermita, Manila",
             createdAt = Timestamp(1716710400L, 0),
             items = listOf(
-                AndroidCartItem("cart_chicken", "prod_chicken_breast", "store_local_market", "Chicken Breast 1kg", 255.0, 1, "", 255.0),
-                AndroidCartItem("cart_oil", "prod_cooking_oil", "store_local_market", "Cooking Oil", 172.0, 1, "", 172.0)
+                AndroidCartItem("cart_chicken", "prod_chicken_breast", "store_local_market", "Chicken Breast 1kg", 255.0, 1, CHICKEN_BREAST_IMAGE, 255.0),
+                AndroidCartItem("cart_oil", "prod_cooking_oil", "store_local_market", "Cooking Oil", 172.0, 1, COOKING_OIL_IMAGE, 172.0)
             )
         ),
         AndroidOrder(
@@ -397,9 +452,9 @@ object AndroidSampleData {
             deliveryAddress = "Salcedo Village, Makati",
             createdAt = Timestamp(1716717600L, 0),
             items = listOf(
-                AndroidCartItem("cart_apples", "prod_fresh_apples", "store_green_basket", "Fresh Apples", 155.0, 1, "", 155.0),
-                AndroidCartItem("cart_lettuce", "prod_lettuce", "store_green_basket", "Lettuce", 96.0, 1, "", 96.0),
-                AndroidCartItem("cart_carrots", "prod_carrots", "store_green_basket", "Carrots", 74.0, 1, "", 74.0)
+                AndroidCartItem("cart_apples", "prod_fresh_apples", "store_green_basket", "Fresh Apples", 155.0, 1, FRESH_APPLES_IMAGE, 155.0),
+                AndroidCartItem("cart_lettuce", "prod_lettuce", "store_green_basket", "Lettuce", 96.0, 1, LETTUCE_IMAGE, 96.0),
+                AndroidCartItem("cart_carrots", "prod_carrots", "store_green_basket", "Carrots", 74.0, 1, CARROTS_IMAGE, 74.0)
             )
         ),
         AndroidOrder(
@@ -416,8 +471,8 @@ object AndroidSampleData {
             deliveryAddress = "Cubao, Quezon City",
             createdAt = Timestamp(1716724800L, 0),
             items = listOf(
-                AndroidCartItem("cart_oreo", "prod_oreo_cookies", "store_daily_needs", "Oreo Cookies", 65.0, 2, "", 130.0),
-                AndroidCartItem("cart_cola", "prod_coca_cola", "store_daily_needs", "Coca Cola 1.5L", 82.0, 1, "", 82.0)
+                AndroidCartItem("cart_oreo", "prod_oreo_cookies", "store_daily_needs", "Oreo Cookies", 65.0, 2, OREO_COOKIES_IMAGE, 130.0),
+                AndroidCartItem("cart_cola", "prod_coca_cola", "store_daily_needs", "Coca Cola 1.5L", 82.0, 1, COCA_COLA_IMAGE, 82.0)
             )
         ),
         AndroidOrder(
@@ -434,7 +489,7 @@ object AndroidSampleData {
             deliveryAddress = "Kapitolyo, Pasig",
             createdAt = Timestamp(1716732000L, 0),
             items = listOf(
-                AndroidCartItem("cart_detergent", "prod_detergent", "store_bee_grocery", "Detergent", 188.0, 1, "", 188.0)
+                AndroidCartItem("cart_detergent", "prod_detergent", "store_bee_grocery", "Detergent", 188.0, 1, DETERGENT_IMAGE, 188.0)
             )
         )
     )

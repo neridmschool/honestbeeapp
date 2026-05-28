@@ -1,5 +1,7 @@
 package com.example.honestbeeapp.ui.admin
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,6 +26,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.HowToReg
 import androidx.compose.material.icons.outlined.Logout
@@ -45,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,7 +57,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +71,7 @@ import com.example.honestbeeapp.data.model.SessionProfile
 import com.example.honestbeeapp.data.sample.AndroidSampleData
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
+import com.example.honestbeeapp.ui.components.HonestbeeLogo
 import com.example.honestbeeapp.ui.components.HonestbeeOutlinedButton
 import com.example.honestbeeapp.ui.components.SectionHeader
 import com.example.honestbeeapp.ui.components.StatusChip
@@ -79,8 +88,11 @@ import com.example.honestbeeapp.util.FirebaseConstants
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import java.net.URL
 
 @Composable
 fun AdminMainScreen(
@@ -224,9 +236,11 @@ private fun AdminTopHeader(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            HonestbeeLogo(modifier = Modifier.size(42.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = selectedTab.title,
@@ -589,6 +603,16 @@ private fun ApprovalUserCard(
     onApprove: () -> Unit,
     onReject: () -> Unit
 ) {
+    val isMerchant = user.role.equals(FirebaseConstants.ROLE_MERCHANT, ignoreCase = true)
+    val isRider = user.role.equals(FirebaseConstants.ROLE_RIDER, ignoreCase = true)
+    val title = if (isMerchant) {
+        user.storeName.ifBlank { fullName(user) }
+    } else {
+        fullName(user)
+    }
+    var pendingAction by remember(user.uid) { mutableStateOf<String?>(null) }
+    var viewedDocument by remember(user.uid) { mutableStateOf<ApprovalDocument?>(null) }
+
     HonestbeeCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
@@ -599,7 +623,7 @@ private fun ApprovalUserCard(
                 Avatar(initials = initials(user))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = fullName(user),
+                        text = title,
                         style = MaterialTheme.typography.titleMedium,
                         color = BeeDarkText,
                         fontWeight = FontWeight.SemiBold,
@@ -617,19 +641,46 @@ private fun ApprovalUserCard(
                 RoleChip(role = user.role)
             }
 
+            if (isMerchant) {
+                MerchantApprovalDetails(
+                    user = user,
+                    onViewPermit = {
+                        viewedDocument = ApprovalDocument(
+                            title = "Business Permit",
+                            imageUrl = user.businessPermitUrl,
+                            missingMessage = "No business permit image URL is available."
+                        )
+                    }
+                )
+            } else if (isRider) {
+                RiderApprovalDetails(
+                    user = user,
+                    onViewLicense = {
+                        viewedDocument = ApprovalDocument(
+                            title = "Driver's License",
+                            imageUrl = user.driverLicenseUrl,
+                            missingMessage = "No driver's license image URL is available."
+                        )
+                    }
+                )
+            } else {
+                UserDetailLine("Phone", user.phone.ifBlank { "No phone" })
+                UserDetailLine("Address", user.address.ifBlank { "No address" })
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 HonestbeeButton(
                     text = "Approve",
-                    onClick = onApprove,
+                    onClick = { pendingAction = FirebaseConstants.STATUS_APPROVED },
                     enabled = !isUpdating,
                     modifier = Modifier.weight(1f)
                 )
                 HonestbeeOutlinedButton(
                     text = "Reject",
-                    onClick = onReject,
+                    onClick = { pendingAction = FirebaseConstants.STATUS_REJECTED },
                     enabled = !isUpdating,
                     modifier = Modifier.weight(1f)
                 )
@@ -659,7 +710,285 @@ private fun ApprovalUserCard(
             }
         }
     }
+
+    pendingAction?.let { action ->
+        ApprovalConfirmationDialog(
+            user = user,
+            action = action,
+            onDismiss = { pendingAction = null },
+            onConfirm = {
+                pendingAction = null
+                if (action == FirebaseConstants.STATUS_APPROVED) {
+                    onApprove()
+                } else {
+                    onReject()
+                }
+            }
+        )
+    }
+
+    viewedDocument?.let { document ->
+        ApprovalDocumentDialog(
+            document = document,
+            onDismiss = { viewedDocument = null }
+        )
+    }
 }
+
+@Composable
+private fun RiderApprovalDetails(
+    user: AppUser,
+    onViewLicense: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        UserDetailLine("Rider name", fullName(user))
+        UserDetailLine("Gmail address", user.email.ifBlank { "No email" })
+        UserDetailLine("Phone number", user.phone.ifBlank { "No phone" })
+        UserDetailLine("Vehicle type", user.vehicleType.ifBlank { "No vehicle type" })
+        UserDetailLine("Address / current location", structuredAddress(user).ifBlank { "No location" })
+        StatusChip(status = user.status.ifBlank { FirebaseConstants.STATUS_PENDING })
+        ApprovalDocumentPreview(
+            title = "Driver's license image",
+            imageUrl = user.driverLicenseUrl,
+            placeholderText = licenseStatusText(user),
+            buttonText = "View License",
+            onViewClick = onViewLicense
+        )
+    }
+}
+
+@Composable
+private fun MerchantApprovalDetails(
+    user: AppUser,
+    onViewPermit: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        UserDetailLine("Store name", user.storeName.ifBlank { "No store name" })
+        UserDetailLine("Owner name", user.ownerName.ifBlank { fullName(user) })
+        UserDetailLine("Gmail address", user.email.ifBlank { "No email" })
+        UserDetailLine("Phone number", user.phone.ifBlank { "No phone" })
+        UserDetailLine("Full structured address", structuredAddress(user).ifBlank { "No address" })
+        UserDetailLine("Opening time", user.openingTime.ifBlank { "No opening time" })
+        UserDetailLine("Closing time", user.closingTime.ifBlank { "No closing time" })
+        StatusChip(status = user.status.ifBlank { FirebaseConstants.STATUS_PENDING })
+        ApprovalDocumentPreview(
+            title = "Business permit image",
+            imageUrl = user.businessPermitUrl,
+            placeholderText = permitStatusText(user),
+            buttonText = "View Permit",
+            onViewClick = onViewPermit
+        )
+    }
+}
+
+@Composable
+private fun ApprovalDocumentPreview(
+    title: String,
+    imageUrl: String,
+    placeholderText: String,
+    buttonText: String,
+    onViewClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = BeeNavigationSelected,
+        border = BorderStroke(1.dp, BeePrimaryYellow.copy(alpha = 0.45f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ApprovalImageBox(
+                imageUrl = imageUrl,
+                modifier = Modifier.size(width = 86.dp, height = 70.dp),
+                contentDescription = title
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BeeMuted
+                )
+                Text(
+                    text = if (imageUrl.isNotBlank()) "Image URL available" else placeholderText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BeeDarkText,
+                    fontWeight = FontWeight.SemiBold
+                )
+                HonestbeeOutlinedButton(
+                    text = buttonText,
+                    onClick = onViewClick,
+                    fullWidth = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApprovalImageBox(
+    imageUrl: String,
+    modifier: Modifier,
+    contentDescription: String,
+    contentScale: ContentScale = ContentScale.Crop
+) {
+    val bitmap = rememberRemoteImageBitmap(imageUrl)
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.Description,
+                contentDescription = contentDescription,
+                tint = BeeHoneyYellow,
+                modifier = Modifier.size(30.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ApprovalDocumentDialog(
+    document: ApprovalDocument,
+    onDismiss: () -> Unit
+) {
+    val hasImageUrl = document.imageUrl.isNotBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = document.title,
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ApprovalImageBox(
+                    imageUrl = document.imageUrl,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp),
+                    contentDescription = document.title,
+                    contentScale = ContentScale.Fit
+                )
+                Text(
+                    text = if (hasImageUrl) {
+                        "Showing uploaded image from saved URL."
+                    } else {
+                        document.missingMessage
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BeeMuted
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = BeeHoneyYellow, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun ApprovalConfirmationDialog(
+    user: AppUser,
+    action: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val isApprove = action == FirebaseConstants.STATUS_APPROVED
+    val actionLabel = if (isApprove) "Approve" else "Reject"
+    val roleLabel = user.role.ifBlank { "account" }
+    val targetName = when {
+        user.role.equals(FirebaseConstants.ROLE_MERCHANT, ignoreCase = true) ->
+            user.storeName.ifBlank { fullName(user) }
+        else -> fullName(user)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "$actionLabel ${roleLabel.replaceFirstChar { it.uppercase() }}?",
+                color = BeeDarkText,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "$actionLabel $targetName and update both users/${user.uid} and the ${roleLabel}s profile document?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = BeeDarkText
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(actionLabel, color = BeeHoneyYellow, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = BeeMuted, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(10.dp)
+    )
+}
+
+@Composable
+private fun rememberRemoteImageBitmap(imageUrl: String): ImageBitmap? {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, imageUrl) {
+        value = loadRemoteImageBitmap(imageUrl)
+    }
+    return bitmap
+}
+
+private suspend fun loadRemoteImageBitmap(imageUrl: String): ImageBitmap? {
+    if (imageUrl.isBlank()) return null
+
+    return withContext(Dispatchers.IO) {
+        runCatching {
+            val connection = URL(imageUrl).openConnection().apply {
+                connectTimeout = 8_000
+                readTimeout = 8_000
+            }
+            connection.getInputStream().use { input ->
+                BitmapFactory.decodeStream(input)?.asImageBitmap()
+            }
+        }.getOrNull()
+    }
+}
+
+private data class ApprovalDocument(
+    val title: String,
+    val imageUrl: String,
+    val missingMessage: String
+)
 
 @Composable
 private fun SummaryCard(
@@ -945,6 +1274,32 @@ private fun fullName(user: AppUser): String {
         user.username.ifBlank {
             user.email.substringBefore("@").ifBlank { "Unknown user" }
         }
+    }
+}
+
+private fun structuredAddress(user: AppUser): String {
+    return listOf(user.street, user.barangay, user.city, user.province)
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .joinToString(", ")
+        .ifBlank { user.address }
+}
+
+private fun permitStatusText(user: AppUser): String {
+    return when {
+        user.businessPermitUrl.isNotBlank() -> "Business permit image available"
+        user.businessPermitSubmitted && user.businessPermitLocalOnly ->
+            "Business permit image submitted locally"
+        else -> "Business permit image missing"
+    }
+}
+
+private fun licenseStatusText(user: AppUser): String {
+    return when {
+        user.driverLicenseUrl.isNotBlank() -> "Driver's license image available"
+        user.driverLicenseSubmitted && user.driverLicenseLocalOnly ->
+            "Driver's license image submitted locally"
+        else -> "Driver's license image missing"
     }
 }
 

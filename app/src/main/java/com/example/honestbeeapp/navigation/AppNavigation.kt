@@ -13,9 +13,13 @@ import com.example.honestbeeapp.data.model.SessionProfile
 import com.example.honestbeeapp.data.model.UserRole
 import com.example.honestbeeapp.data.repository.AccountRepository
 import com.example.honestbeeapp.ui.admin.AdminMainScreen
+import com.example.honestbeeapp.ui.auth.CustomerRegisterScreen
 import com.example.honestbeeapp.ui.auth.LoginScreen
+import com.example.honestbeeapp.ui.auth.MerchantRegisterScreen
 import com.example.honestbeeapp.ui.auth.PendingApprovalScreen
 import com.example.honestbeeapp.ui.auth.RejectedScreen
+import com.example.honestbeeapp.ui.auth.RiderRegisterScreen
+import com.example.honestbeeapp.ui.auth.WelcomeScreen
 import com.example.honestbeeapp.ui.components.LoadingScreen
 import com.example.honestbeeapp.ui.components.ProfileErrorScreen
 import com.example.honestbeeapp.ui.customer.CustomerMainScreen
@@ -43,7 +47,7 @@ fun AppNavigation(
     var loggedOutMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var routeState by remember {
         mutableStateOf<AppRouteState>(
-            if (auth.currentUser == null) AppRouteState.LoggedOut else AppRouteState.Loading
+            if (auth.currentUser == null) AppRouteState.Welcome else AppRouteState.Loading
         )
     }
 
@@ -58,7 +62,7 @@ fun AppNavigation(
     LaunchedEffect(currentUser?.uid, reloadKey) {
         val firebaseUser = currentUser
         if (firebaseUser == null) {
-            routeState = AppRouteState.LoggedOut
+            routeState = AppRouteState.Welcome
             return@LaunchedEffect
         }
 
@@ -72,14 +76,52 @@ fun AppNavigation(
     when (val state = routeState) {
         AppRouteState.Loading -> LoadingScreen()
 
-        AppRouteState.LoggedOut -> LoginScreen(
+        AppRouteState.Welcome -> WelcomeScreen(
+            onLoginClick = { routeState = AppRouteState.Login },
+            onCustomerSignUpClick = { routeState = AppRouteState.CustomerRegister },
+            onMerchantSignUpClick = { routeState = AppRouteState.MerchantRegister },
+            onRiderSignUpClick = { routeState = AppRouteState.RiderRegister }
+        )
+
+        AppRouteState.Login -> LoginScreen(
             initialMessage = loggedOutMessage,
             onSignedIn = {
                 loggedOutMessage = null
                 currentUser = auth.currentUser
                 routeState = AppRouteState.Loading
                 reloadKey++
-            }
+            },
+            onBackToWelcome = { routeState = AppRouteState.Welcome }
+        )
+
+        AppRouteState.CustomerRegister -> CustomerRegisterScreen(
+            onRegistered = {
+                loggedOutMessage = null
+                currentUser = auth.currentUser
+                routeState = AppRouteState.Loading
+                reloadKey++
+            },
+            onBackToWelcome = { routeState = AppRouteState.Welcome }
+        )
+
+        AppRouteState.MerchantRegister -> MerchantRegisterScreen(
+            onRegistered = {
+                loggedOutMessage = null
+                currentUser = auth.currentUser
+                routeState = AppRouteState.Loading
+                reloadKey++
+            },
+            onBackToWelcome = { routeState = AppRouteState.Welcome }
+        )
+
+        AppRouteState.RiderRegister -> RiderRegisterScreen(
+            onRegistered = {
+                loggedOutMessage = null
+                currentUser = auth.currentUser
+                routeState = AppRouteState.Loading
+                reloadKey++
+            },
+            onBackToWelcome = { routeState = AppRouteState.Welcome }
         )
 
         is AppRouteState.CustomerDashboard -> CustomerMainScreen(
@@ -117,7 +159,7 @@ fun AppNavigation(
                 loggedOutMessage = state.message
                 auth.signOut()
                 currentUser = null
-                routeState = AppRouteState.LoggedOut
+                routeState = AppRouteState.Welcome
             }
             LoadingScreen()
         }
@@ -210,7 +252,11 @@ private fun AppUser.toSessionProfile(
 
 private sealed class AppRouteState {
     object Loading : AppRouteState()
-    object LoggedOut : AppRouteState()
+    object Welcome : AppRouteState()
+    object Login : AppRouteState()
+    object CustomerRegister : AppRouteState()
+    object MerchantRegister : AppRouteState()
+    object RiderRegister : AppRouteState()
     data class CustomerDashboard(val profile: SessionProfile) : AppRouteState()
     data class MerchantDashboard(val profile: SessionProfile) : AppRouteState()
     data class RiderDashboard(val profile: SessionProfile) : AppRouteState()

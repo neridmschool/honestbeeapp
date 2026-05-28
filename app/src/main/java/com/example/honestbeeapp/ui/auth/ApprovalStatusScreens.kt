@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.example.honestbeeapp.data.model.SessionProfile
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
+import com.example.honestbeeapp.ui.components.HonestbeeLogo
 import com.example.honestbeeapp.ui.theme.BeeCream
 import com.example.honestbeeapp.ui.theme.BeeDarkText
 import com.example.honestbeeapp.ui.theme.BeeError
@@ -101,6 +102,8 @@ private fun ApprovalStateScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    HonestbeeLogo(modifier = Modifier.size(90.dp))
+
                     Box(
                         modifier = Modifier
                             .size(86.dp)

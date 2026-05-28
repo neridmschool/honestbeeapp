@@ -80,8 +80,10 @@ import com.example.honestbeeapp.data.repository.UserRepository
 import com.example.honestbeeapp.data.sample.AndroidSampleData
 import com.example.honestbeeapp.ui.components.HonestbeeButton
 import com.example.honestbeeapp.ui.components.HonestbeeCard
+import com.example.honestbeeapp.ui.components.HonestbeeLogo
 import com.example.honestbeeapp.ui.components.HonestbeeOutlinedButton
 import com.example.honestbeeapp.ui.components.HonestbeePasswordField
+import com.example.honestbeeapp.ui.components.HonestbeeRemoteImage
 import com.example.honestbeeapp.ui.components.HonestbeeTextField
 import com.example.honestbeeapp.ui.components.SectionHeader
 import com.example.honestbeeapp.ui.components.StatusChip
@@ -431,9 +433,11 @@ private fun MerchantTopHeader(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            HonestbeeLogo(modifier = Modifier.size(42.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (selectedTab == MerchantTab.Dashboard) {
@@ -1224,20 +1228,12 @@ private fun MerchantProductCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(BeeCream),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Inventory2,
-                    contentDescription = null,
-                    tint = BeeHoneyYellow,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
+            HonestbeeRemoteImage(
+                imageUrl = product.imageUrl,
+                contentDescription = "${product.productName} image",
+                modifier = Modifier.size(64.dp),
+                icon = Icons.Outlined.Inventory2
+            )
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -1302,9 +1298,15 @@ private fun MerchantOrderCard(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                HonestbeeRemoteImage(
+                    imageUrl = orderStoreImageUrl(order),
+                    contentDescription = "${order.storeName} image",
+                    modifier = Modifier.size(54.dp),
+                    icon = Icons.Outlined.Storefront
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = order.orderId,
@@ -1374,6 +1376,13 @@ private fun MerchantOrderCard(
             }
         }
     }
+}
+
+private fun orderStoreImageUrl(order: AndroidOrder): String {
+    return AndroidSampleData.stores
+        .firstOrNull { it.storeId == order.merchantId || it.storeName == order.storeName }
+        ?.imageUrl
+        .orEmpty()
 }
 
 @Composable
